@@ -303,10 +303,13 @@ export class KafkaMessageQueue extends MessageQueue
     protected fromMessage(message: MessageEnvelope): any {
         if (message == null) return null;
 
-        let headers = {
-            "message_type": Buffer.from(message.message_type),
-            "correlation_id": Buffer.from(message.correlation_id),
-        };
+        let headers: any = {};
+        if (message.message_type != null) {
+            headers.message_type = Buffer.from(message.message_type);
+        }
+        if (message.correlation_id != null) {
+            headers.correlation_id = Buffer.from(message.correlation_id);
+        }
 
         let msg = {
             key: Buffer.from(message.message_id),

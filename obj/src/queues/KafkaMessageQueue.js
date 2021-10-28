@@ -241,10 +241,13 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
     fromMessage(message) {
         if (message == null)
             return null;
-        let headers = {
-            "message_type": Buffer.from(message.message_type),
-            "correlation_id": Buffer.from(message.correlation_id),
-        };
+        let headers = {};
+        if (message.message_type != null) {
+            headers.message_type = Buffer.from(message.message_type);
+        }
+        if (message.correlation_id != null) {
+            headers.correlation_id = Buffer.from(message.correlation_id);
+        }
         let msg = {
             key: Buffer.from(message.message_id),
             value: message.message,
