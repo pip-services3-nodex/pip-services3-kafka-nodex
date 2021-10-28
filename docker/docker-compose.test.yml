@@ -10,10 +10,10 @@ services:
       - kafka
     environment:
       - KAFKA_SERVICE_HOST=kafka
-      - KAFKA_SERVICE_PORT=9092;
-      - KAFKA_TOPIC=test;
-      - KAFKA_USER=user;
-      - KAFKA_PASS=pass123;
+      - KAFKA_SERVICE_PORT=9092
+      - KAFKA_TOPIC=test
+      - KAFKA_USER=kafka
+      - KAFKA_PASS=pass123
      
   zookeeper:
     image: 'bitnami/zookeeper:latest'

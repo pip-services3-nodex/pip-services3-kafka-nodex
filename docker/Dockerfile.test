@@ -11,4 +11,4 @@ RUN npm install
 # copy all project
 COPY . .
  
-CMD [ "npm", "test" ]
+CMD sleep 15 && npm test
