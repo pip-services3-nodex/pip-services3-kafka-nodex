@@ -19,7 +19,7 @@ class MessageQueueFixture {
     }
     testSendReceiveMessage() {
         return __awaiter(this, void 0, void 0, function* () {
-            let envelope1 = new pip_services3_messaging_nodex_1.MessageEnvelope(null, "Test", "Test message");
+            let envelope1 = new pip_services3_messaging_nodex_1.MessageEnvelope("123", "Test", "Test message");
             yield this._queue.send(null, envelope1);
             let envelope2 = yield this._queue.receive(null, 10000);
             assert.isNotNull(envelope2);
