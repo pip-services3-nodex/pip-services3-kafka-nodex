@@ -51,16 +51,5 @@ suite('KafkaMessageQueue', () => {
        await fixture.testReceiveSendMessage();
     });
 
-    test('Send Peek Message', async () => {
-        await fixture.testSendPeekMessage();
-    });
-
-    test('Peek No Message', async () => {
-        await fixture.testPeekNoMessage();
-    });
-      
-    test('On Message', async () => {
-        await fixture.testOnMessage();
-    });
 
 });

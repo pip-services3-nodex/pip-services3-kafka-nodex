@@ -41,14 +41,5 @@ suite('KafkaMessageQueue', () => {
     test('Receive and Send Message', () => __awaiter(void 0, void 0, void 0, function* () {
         yield fixture.testReceiveSendMessage();
     }));
-    test('Send Peek Message', () => __awaiter(void 0, void 0, void 0, function* () {
-        yield fixture.testSendPeekMessage();
-    }));
-    test('Peek No Message', () => __awaiter(void 0, void 0, void 0, function* () {
-        yield fixture.testPeekNoMessage();
-    }));
-    test('On Message', () => __awaiter(void 0, void 0, void 0, function* () {
-        yield fixture.testOnMessage();
-    }));
 });
 //# sourceMappingURL=KafkaMessageQueue.test.js.map
