@@ -41,6 +41,10 @@ const KafkaConnection_1 = require("../connect/KafkaConnection");
  *   - username:                    user name
  *   - password:                    user password
  * - options:
+ *   - num_partitions:       (optional) number of partitions of the created topic (default: 1)
+ *   - replication_factor:   (optional) kafka replication factor of the topic (default: 1)
+ *   - readable_partitions:      (optional) list of partition indexes to be read (default: all)
+ *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - autosubscribe:        (optional) true to automatically subscribe on option (default: false)
  *   - acks                  (optional) control the number of required acks: -1 - all, 0 - none, 1 - only leader (default: -1)
  *   - log_level:            (optional) log level 0 - None, 1 - Error, 2 - Warn, 3 - Info, 4 - Debug (default: 1)
@@ -185,6 +189,10 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
             if (!this._connection.isOpen()) {
                 throw new pip_services3_commons_nodex_2.ConnectionException(correlationId, "CONNECT_FAILED", "Kafka connection is not opened");
             }
+            // create topic if it does not exist
+            let topics = yield this._connection.readQueueNames();
+            if (topics.indexOf(this.getTopic()) == -1)
+                yield this._connection.createQueue(this.getTopic());
             // Subscribe right away
             if (this._autoSubscribe) {
                 yield this.subscribe(correlationId);

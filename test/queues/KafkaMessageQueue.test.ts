@@ -26,7 +26,10 @@ suite('KafkaMessageQueue', () => {
         'credential.username', brokerUser,
         'credential.password', brokerPass,
         'credential.mechanism','plain',
-        'options.autosubscribe', true
+        'options.autosubscribe', true,
+        'options.num_partitions', 2,
+        'options.readable_partitions', '1',
+        'options.write_partition', '1'
     );        
 
     setup(async () => {

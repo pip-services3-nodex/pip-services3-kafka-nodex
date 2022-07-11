@@ -39,6 +39,10 @@ const KafkaConnectionResolver_1 = require("./KafkaConnectionResolver");
  *   - username:                  user name
  *   - password:                  user password
  * - options:
+ *   - num_partitions:       (optional) number of partitions of the created topic (default: 1)
+ *   - replication_factor:   (optional) kafka replication factor of the topic (default: 1)
+ *   - readable_partitions:      (optional) list of partition indexes to be read (default: all)
+ *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - log_level:            (optional) log level 0 - None, 1 - Error, 2 - Warn, 3 - Info, 4 - Debug (default: 1)
  *   - connect_timeout:      (optional) number of milliseconds to connect to broker (default: 1000)
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
@@ -83,6 +87,8 @@ class KafkaConnection {
         this._maxRetries = 5;
         this._retryTimeout = 30000;
         this._requestTimeout = 30000;
+        this._numPartitions = 1;
+        this._replicationFactor = 1;
     }
     /**
      * Configures component by passing configuration parameters.
@@ -99,6 +105,14 @@ class KafkaConnection {
         this._maxRetries = config.getAsIntegerWithDefault("options.max_retries", this._maxRetries);
         this._retryTimeout = config.getAsIntegerWithDefault("options.retry_timeout", this._retryTimeout);
         this._requestTimeout = config.getAsIntegerWithDefault("options.request_timeout", this._requestTimeout);
+        this._numPartitions = config.getAsIntegerWithDefault('options.num_partitions', this._numPartitions);
+        this._replicationFactor = config.getAsIntegerWithDefault('options.replication_factor', this._replicationFactor);
+        this._writePartition = config.getAsIntegerWithDefault('options.write_partition', this._writePartition);
+        let partitions = config.getAsNullableString('options.readable_partitions');
+        partitions = partitions != null ? partitions.split(';') : [];
+        for (let index = 0; index < partitions.length; index++)
+            partitions[index] = parseInt(partitions[index]);
+        this._readablePartitions = partitions.length > 0 ? partitions : this._readablePartitions;
     }
     /**
      * Sets references to dependent components.
@@ -242,7 +256,13 @@ class KafkaConnection {
      */
     createQueue(name) {
         return __awaiter(this, void 0, void 0, function* () {
-            // Todo: complete implementation
+            this.checkOpen();
+            this.connectToAdmin();
+            yield this._adminClient.createTopics({ topics: [{
+                        topic: name,
+                        numPartitions: this._numPartitions,
+                        replicationFactor: this._replicationFactor
+                    }] });
         });
     }
     /**
@@ -252,7 +272,11 @@ class KafkaConnection {
      */
     deleteQueue(name) {
         return __awaiter(this, void 0, void 0, function* () {
-            // Todo: complete implementation
+            this.checkOpen();
+            this.connectToAdmin();
+            yield this._adminClient.deleteTopics({
+                topics: [name]
+            });
         });
     }
     /**
@@ -266,6 +290,10 @@ class KafkaConnection {
             // Check for open connection
             this.checkOpen();
             options = options || {};
+            if (this._writePartition != null) {
+                for (let i = 0; i < messages.length; i++)
+                    messages[i].partition = this._writePartition;
+            }
             yield this._producer.send({
                 topic: topic,
                 messages: messages,
@@ -307,7 +335,8 @@ class KafkaConnection {
                     autoCommitInterval: options.autoCommitInterval,
                     autoCommitThreshold: options.autoCommitThreshold,
                     eachMessage: ({ topic, partition, message }) => __awaiter(this, void 0, void 0, function* () {
-                        listener.onMessage(topic, partition, message);
+                        if (this._readablePartitions.length == 0 || this._readablePartitions.includes(partition))
+                            listener.onMessage(topic, partition, message);
                     })
                 });
                 // Add the subscription

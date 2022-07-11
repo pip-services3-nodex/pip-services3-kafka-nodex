@@ -24,7 +24,7 @@ suite('KafkaMessageQueue', () => {
     let brokerTopic = process.env['KAFKA_TOPIC'] || 'test';
     let brokerUser = process.env['KAFKA_USER']; // || 'kafka';
     let brokerPass = process.env['KAFKA_PASS']; // || 'pass123';
-    let queueConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples('queue', brokerTopic, 'connection.protocol', 'tcp', 'connection.host', brokerHost, 'connection.port', brokerPort, 'credential.username', brokerUser, 'credential.password', brokerPass, 'credential.mechanism', 'plain', 'options.autosubscribe', true);
+    let queueConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples('queue', brokerTopic, 'connection.protocol', 'tcp', 'connection.host', brokerHost, 'connection.port', brokerPort, 'credential.username', brokerUser, 'credential.password', brokerPass, 'credential.mechanism', 'plain', 'options.autosubscribe', true, 'options.num_partitions', 2, 'options.readable_partitions', '1', 'options.write_partition', '1');
     setup(() => __awaiter(void 0, void 0, void 0, function* () {
         queue = new KafkaMessageQueue_1.KafkaMessageQueue(brokerTopic);
         queue.configure(queueConfig);

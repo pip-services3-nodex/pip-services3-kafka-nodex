@@ -24,7 +24,7 @@ suite('KafkaConnection', () => {
     let brokerUser = process.env['KAFKA_USER']; // || 'kafka';
     let brokerPass = process.env['KAFKA_PASS']; // || 'pass123';
     setup(() => {
-        let config = pip_services3_commons_nodex_1.ConfigParams.fromTuples('topic', brokerTopic, 'connection.protocol', 'tcp', 'connection.host', brokerHost, 'connection.port', brokerPort, 'credential.username', brokerUser, 'credential.password', brokerPass, 'credential.mechanism', 'plain');
+        let config = pip_services3_commons_nodex_1.ConfigParams.fromTuples('topic', brokerTopic, 'connection.protocol', 'tcp', 'connection.host', brokerHost, 'connection.port', brokerPort, 'credential.username', brokerUser, 'credential.password', brokerPass, 'credential.mechanism', 'plain', 'options.num_partitions', 2, 'options.readable_partitions', '1', 'options.write_partition', '1');
         connection = new KafkaConnection_1.KafkaConnection();
         connection.configure(config);
     });

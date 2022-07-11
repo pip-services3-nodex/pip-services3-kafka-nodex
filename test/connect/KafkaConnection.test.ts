@@ -25,7 +25,10 @@ suite('KafkaConnection', ()=> {
             'connection.port', brokerPort,
             'credential.username', brokerUser,
             'credential.password', brokerPass,
-            'credential.mechanism', 'plain'
+            'credential.mechanism', 'plain',
+            'options.num_partitions', 2,
+            'options.readable_partitions', '1',
+            'options.write_partition', '1'
         );        
 
         connection = new KafkaConnection();

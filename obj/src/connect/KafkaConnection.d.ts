@@ -27,6 +27,10 @@ import { KafkaSubscription } from './KafkaSubscription';
  *   - username:                  user name
  *   - password:                  user password
  * - options:
+ *   - num_partitions:       (optional) number of partitions of the created topic (default: 1)
+ *   - replication_factor:   (optional) kafka replication factor of the topic (default: 1)
+ *   - readable_partitions:      (optional) list of partition indexes to be read (default: all)
+ *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - log_level:            (optional) log level 0 - None, 1 - Error, 2 - Warn, 3 - Info, 4 - Debug (default: 1)
  *   - connect_timeout:      (optional) number of milliseconds to connect to broker (default: 1000)
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
@@ -80,6 +84,10 @@ export declare class KafkaConnection implements IMessageQueueConnection, IRefere
     protected _maxRetries: number;
     protected _retryTimeout: number;
     protected _requestTimeout: number;
+    protected _numPartitions: number;
+    protected _replicationFactor: number;
+    protected _writePartition: number;
+    protected _readablePartitions: number[];
     /**
      * Creates a new instance of the connection component.
      */
