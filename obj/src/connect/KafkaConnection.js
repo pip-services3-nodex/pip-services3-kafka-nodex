@@ -335,7 +335,7 @@ class KafkaConnection {
                     autoCommitInterval: options.autoCommitInterval,
                     autoCommitThreshold: options.autoCommitThreshold,
                     eachMessage: ({ topic, partition, message }) => __awaiter(this, void 0, void 0, function* () {
-                        if (this._readablePartitions.length == 0 || this._readablePartitions.includes(partition))
+                        if (this._readablePartitions == null || this._readablePartitions.length == 0 || this._readablePartitions.includes(partition))
                             listener.onMessage(topic, partition, message);
                     })
                 });

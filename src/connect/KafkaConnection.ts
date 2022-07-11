@@ -399,7 +399,7 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
                 autoCommitInterval: options.autoCommitInterval,
                 autoCommitThreshold: options.autoCommitThreshold,
                 eachMessage: async ({ topic, partition, message }) => {
-                    if (this._readablePartitions.length == 0 || this._readablePartitions.includes(partition)) 
+                    if (this._readablePartitions == null || this._readablePartitions.length == 0 || this._readablePartitions.includes(partition)) 
                         listener.onMessage(topic, partition, message);
                 }
             });
