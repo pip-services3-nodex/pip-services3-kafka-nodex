@@ -39,15 +39,15 @@ const KafkaConnectionResolver_1 = require("./KafkaConnectionResolver");
  *   - username:                  user name
  *   - password:                  user password
  * - options:
+ *   - acks                  (optional) control the number of required acks: -1 - all, 0 - none, 1 - only leader (default: -1)
  *   - num_partitions:       (optional) number of partitions of the created topic (default: 1)
  *   - replication_factor:   (optional) kafka replication factor of the topic (default: 1)
- *   - readable_partitions:      (optional) list of partition indexes to be read (default: all)
- *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - log_level:            (optional) log level 0 - None, 1 - Error, 2 - Warn, 3 - Info, 4 - Debug (default: 1)
  *   - connect_timeout:      (optional) number of milliseconds to connect to broker (default: 1000)
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
  *   - retry_timeout:        (optional) number of milliseconds to wait on each reconnection attempt (default: 30000)
  *   - request_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
+ *   - session_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
  *
  * ### References ###
  *
@@ -83,12 +83,14 @@ class KafkaConnection {
         this._subscriptions = [];
         this._clientId = os.hostname();
         this._logLevel = 1;
+        this._acks = -1;
         this._connectTimeout = 1000;
         this._maxRetries = 5;
         this._retryTimeout = 30000;
         this._requestTimeout = 30000;
         this._numPartitions = 1;
         this._replicationFactor = 1;
+        this._sessionTimeout = 30000;
     }
     /**
      * Configures component by passing configuration parameters.
@@ -105,14 +107,10 @@ class KafkaConnection {
         this._maxRetries = config.getAsIntegerWithDefault("options.max_retries", this._maxRetries);
         this._retryTimeout = config.getAsIntegerWithDefault("options.retry_timeout", this._retryTimeout);
         this._requestTimeout = config.getAsIntegerWithDefault("options.request_timeout", this._requestTimeout);
+        this._sessionTimeout = config.getAsIntegerWithDefault("options.session_timeout", this._sessionTimeout);
+        this._acks = config.getAsIntegerWithDefault("options.acks", this._acks);
         this._numPartitions = config.getAsIntegerWithDefault('options.num_partitions', this._numPartitions);
         this._replicationFactor = config.getAsIntegerWithDefault('options.replication_factor', this._replicationFactor);
-        this._writePartition = config.getAsIntegerWithDefault('options.write_partition', this._writePartition);
-        let partitions = config.getAsNullableString('options.readable_partitions');
-        partitions = partitions != null ? partitions.split(';') : [];
-        for (let index = 0; index < partitions.length; index++)
-            partitions[index] = parseInt(partitions[index]);
-        this._readablePartitions = partitions.length > 0 ? partitions : this._readablePartitions;
     }
     /**
      * Sets references to dependent components.
@@ -285,21 +283,15 @@ class KafkaConnection {
      * @param messages a list of messages to be published
      * @param options publishing options
      */
-    publish(topic, messages, options) {
+    publish(topic, messages) {
         return __awaiter(this, void 0, void 0, function* () {
             // Check for open connection
             this.checkOpen();
-            options = options || {};
-            if (this._writePartition != null) {
-                for (let i = 0; i < messages.length; i++)
-                    messages[i].partition = this._writePartition;
-            }
             yield this._producer.send({
                 topic: topic,
                 messages: messages,
-                acks: options.acks,
-                timeout: options.timeout,
-                compression: options.compression
+                acks: this._acks,
+                timeout: this._connectTimeout
             });
         });
     }
@@ -318,10 +310,35 @@ class KafkaConnection {
             // Subscribe to topic
             let consumer = this._connection.consumer({
                 groupId: groupId || "default",
-                sessionTimeout: options.sessionTimeout,
+                sessionTimeout: options.sessionTimeout || this._sessionTimeout,
                 heartbeatInterval: options.heartbeatInterval,
                 rebalanceTimeout: options.rebalanceTimeout,
                 allowAutoTopicCreation: true
+            });
+            // kafka heartbeat
+            const { HEARTBEAT } = consumer.events;
+            let lastHeartbeat;
+            consumer.on(HEARTBEAT, ({ timestamp }) => __awaiter(this, void 0, void 0, function* () { return yield isHealthy(timestamp); }));
+            const isHealthy = (timestamp) => __awaiter(this, void 0, void 0, function* () {
+                lastHeartbeat = timestamp;
+                // Consumer has heartbeat within the session timeout,
+                // so it is healthy
+                if (Date.now() - lastHeartbeat < this._sessionTimeout) {
+                    return true;
+                }
+                else {
+                    // try to get group describe
+                    try {
+                        yield consumer.describeGroup();
+                    }
+                    catch (ex) {
+                        let config = yield this._connectionResolver.resolve("kafka-heartbeat");
+                        let brokers = config.getAsString("brokers");
+                        throw new pip_services3_commons_nodex_2.ConnectionException("kafka-heartbeat", "CANNOT_CONNECT", "Connection to Kafka service failed")
+                            .withDetails("brokers", brokers);
+                    }
+                    return true;
+                }
             });
             try {
                 yield consumer.connect();
@@ -335,8 +352,7 @@ class KafkaConnection {
                     autoCommitInterval: options.autoCommitInterval,
                     autoCommitThreshold: options.autoCommitThreshold,
                     eachMessage: ({ topic, partition, message }) => __awaiter(this, void 0, void 0, function* () {
-                        if (this._readablePartitions == null || this._readablePartitions.length == 0 || this._readablePartitions.includes(partition))
-                            listener.onMessage(topic, partition, message);
+                        listener.onMessage(topic, partition, message);
                     })
                 });
                 // Add the subscription

@@ -37,15 +37,15 @@ import { KafkaSubscription } from './KafkaSubscription';
  *   - username:                  user name
  *   - password:                  user password
  * - options:
+ *   - acks                  (optional) control the number of required acks: -1 - all, 0 - none, 1 - only leader (default: -1)
  *   - num_partitions:       (optional) number of partitions of the created topic (default: 1)
  *   - replication_factor:   (optional) kafka replication factor of the topic (default: 1)
- *   - readable_partitions:      (optional) list of partition indexes to be read (default: all)
- *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - log_level:            (optional) log level 0 - None, 1 - Error, 2 - Warn, 3 - Info, 4 - Debug (default: 1)
  *   - connect_timeout:      (optional) number of milliseconds to connect to broker (default: 1000)
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
  *   - retry_timeout:        (optional) number of milliseconds to wait on each reconnection attempt (default: 30000)
  *   - request_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
+ *   - session_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
  * 
  * ### References ###
  * 
@@ -105,14 +105,15 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
 
     protected _clientId: string = os.hostname();
     protected _logLevel: number = 1;
+    protected _acks: number = -1;
     protected _connectTimeout: number = 1000;
     protected _maxRetries: number = 5;
     protected _retryTimeout: number = 30000;
     protected _requestTimeout: number = 30000;
     protected _numPartitions: number = 1
     protected _replicationFactor: number = 1
-    protected _writePartition: number;
-    protected _readablePartitions: number[];
+    protected _sessionTimeout: number = 30000;
+    
 
     /**
      * Creates a new instance of the connection component.
@@ -135,19 +136,12 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
         this._maxRetries = config.getAsIntegerWithDefault("options.max_retries", this._maxRetries);
         this._retryTimeout = config.getAsIntegerWithDefault("options.retry_timeout", this._retryTimeout);
         this._requestTimeout = config.getAsIntegerWithDefault("options.request_timeout", this._requestTimeout);
-
+        this._sessionTimeout = config.getAsIntegerWithDefault("options.session_timeout", this._sessionTimeout);
+        this._acks = config.getAsIntegerWithDefault("options.acks", this._acks);
+        
         this._numPartitions = config.getAsIntegerWithDefault('options.num_partitions', this._numPartitions)
         this._replicationFactor = config.getAsIntegerWithDefault('options.replication_factor',
             this._replicationFactor)
-
-        this._writePartition = config.getAsIntegerWithDefault('options.write_partition', this._writePartition);
-
-        let partitions: any = config.getAsNullableString('options.readable_partitions');
-        partitions = partitions != null ? partitions.split(';') : [];
-        for (let index = 0; index < partitions.length; index++)
-            partitions[index] = parseInt(partitions[index]);
-
-        this._readablePartitions = partitions.length > 0 ? partitions : this._readablePartitions;
     }
 
     /**
@@ -343,23 +337,15 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
      * @param messages a list of messages to be published
      * @param options publishing options
      */
-     public async publish(topic: string, messages: any[], options: any): Promise<void> {
+     public async publish(topic: string, messages: any[]): Promise<void> {
         // Check for open connection
         this.checkOpen();
-
-        options = options || {};
-
-        if (this._writePartition != null) {
-            for (let i = 0; i < messages.length; i++)
-                messages[i].partition = this._writePartition;
-        }
 
         await this._producer.send({
             topic: topic,
             messages: messages,
-            acks: options.acks,
-            timeout: options.timeout,
-            compression: options.compression
+            acks: this._acks,
+            timeout: this._connectTimeout
         });
     }
 
@@ -379,12 +365,38 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
         // Subscribe to topic
         let consumer = this._connection.consumer({
             groupId: groupId || "default",
-            sessionTimeout: options.sessionTimeout,
+            sessionTimeout: options.sessionTimeout || this._sessionTimeout,
             heartbeatInterval: options.heartbeatInterval,
             rebalanceTimeout: options.rebalanceTimeout,
             allowAutoTopicCreation: true
         });
-    
+
+        // kafka heartbeat
+        const { HEARTBEAT } = consumer.events
+        let lastHeartbeat: number;
+        consumer.on(HEARTBEAT, async ({ timestamp }) => await isHealthy(timestamp))
+         
+        const isHealthy = async (timestamp) => {
+            lastHeartbeat = timestamp;
+            // Consumer has heartbeat within the session timeout,
+            // so it is healthy
+            if (Date.now() - lastHeartbeat < this._sessionTimeout) {
+                return true;
+            } else {
+                // try to get group describe
+                try {
+                   await consumer.describeGroup(); 
+                } catch(ex) {
+                    let config = await this._connectionResolver.resolve("kafka-heartbeat");
+                    let brokers = config.getAsString("brokers");
+                    throw new ConnectionException("kafka-heartbeat", "CANNOT_CONNECT", "Connection to Kafka service failed")
+                        .withDetails("brokers", brokers);
+                }
+
+                return true;
+            }
+        }
+
         try {
             await consumer.connect();
 
@@ -398,9 +410,8 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
                 autoCommit: options.autoCommit,
                 autoCommitInterval: options.autoCommitInterval,
                 autoCommitThreshold: options.autoCommitThreshold,
-                eachMessage: async ({ topic, partition, message }) => {
-                    if (this._readablePartitions == null || this._readablePartitions.length == 0 || this._readablePartitions.includes(partition)) 
-                        listener.onMessage(topic, partition, message);
+                eachMessage: async ({ topic, partition, message }) => { 
+                    listener.onMessage(topic, partition, message);
                 }
             });
 

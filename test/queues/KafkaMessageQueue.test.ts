@@ -25,12 +25,13 @@ suite('KafkaMessageQueue', () => {
         'connection.port', brokerPort,
         'credential.username', brokerUser,
         'credential.password', brokerPass,
-        'credential.mechanism','plain',
+        'credential.mechanism', 'plain',
         'options.autosubscribe', true,
         'options.num_partitions', 2,
-        'options.readable_partitions', '1',
-        'options.write_partition', '1'
-    );        
+        'options.read_partitions', '1',
+        'options.write_partition', '1',
+        "options.listen_connection", true
+    );
 
     setup(async () => {
         queue = new KafkaMessageQueue(brokerTopic);
@@ -49,10 +50,20 @@ suite('KafkaMessageQueue', () => {
     test('Send and Receive Message', async () => {
         await fixture.testSendReceiveMessage();
     });
- 
+
     test('Receive and Send Message', async () => {
-       await fixture.testReceiveSendMessage();
+        await fixture.testReceiveSendMessage();
     });
 
+    test('Send Peek Message', async () => {
+        await fixture.testSendPeekMessage();
+    });
 
+    test('Peek No Message', async () => {
+        await fixture.testPeekNoMessage();
+    });
+
+    test('On Message', async () => {
+        await fixture.testOnMessage();
+    });
 });

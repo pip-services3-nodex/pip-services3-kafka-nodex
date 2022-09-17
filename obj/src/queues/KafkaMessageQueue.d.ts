@@ -12,6 +12,7 @@ import { IMessageReceiver } from 'pip-services3-messaging-nodex';
 import { MessageQueue } from 'pip-services3-messaging-nodex';
 import { MessageEnvelope } from 'pip-services3-messaging-nodex';
 import { KafkaConnection } from '../connect/KafkaConnection';
+import { KafkaConnectionListener } from '../connect/KafkaConnectionListener';
 /**
  * Message queue that sends and receives messages via Kafka message broker.
  *
@@ -34,12 +35,10 @@ import { KafkaConnection } from '../connect/KafkaConnection';
  *   - username:                    user name
  *   - password:                    user password
  * - options:
- *   - num_partitions:       (optional) number of partitions of the created topic (default: 1)
- *   - replication_factor:   (optional) kafka replication factor of the topic (default: 1)
- *   - readable_partitions:      (optional) list of partition indexes to be read (default: all)
+ *   - listen_connection:    (optional) listening if the connection is alive (default: false)
+ *   - read_partitions:      (optional) list of partition indexes to be read (default: all)
  *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - autosubscribe:        (optional) true to automatically subscribe on option (default: false)
- *   - acks                  (optional) control the number of required acks: -1 - all, 0 - none, 1 - only leader (default: -1)
  *   - log_level:            (optional) log level 0 - None, 1 - Error, 2 - Warn, 3 - Info, 4 - Debug (default: 1)
  *   - connect_timeout:      (optional) number of milliseconds to connect to broker (default: 1000)
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
@@ -86,6 +85,7 @@ export declare class KafkaMessageQueue extends MessageQueue implements IReferenc
     private _references;
     private _opened;
     private _localConnection;
+    protected _listenConnection: boolean;
     /**
      * The dependency resolver.
      */
@@ -98,16 +98,20 @@ export declare class KafkaMessageQueue extends MessageQueue implements IReferenc
      * The Kafka connection component.
      */
     protected _connection: KafkaConnection;
+    /**
+     * The Kafka connection listener component.
+     */
+    protected _connectionListener: KafkaConnectionListener;
     protected _topic: string;
     protected _groupId: string;
     protected _fromBeginning: boolean;
     protected _autoCommit: boolean;
-    protected _readPartitions: number;
-    protected _acks: number;
     protected _autoSubscribe: boolean;
     protected _subscribed: boolean;
     protected _messages: MessageEnvelope[];
     protected _receiver: IMessageReceiver;
+    protected _writePartition: number;
+    protected _readablePartitions: number[];
     /**
      * Creates a new instance of the persistence component.
      *
@@ -131,6 +135,7 @@ export declare class KafkaMessageQueue extends MessageQueue implements IReferenc
      */
     unsetReferences(): void;
     private createConnection;
+    private createConnectionListener;
     /**
      * Checks if the component is opened.
      *

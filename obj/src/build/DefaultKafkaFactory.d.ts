@@ -7,6 +7,7 @@ import { Factory } from 'pip-services3-components-nodex';
  */
 export declare class DefaultKafkaFactory extends Factory {
     private static readonly KafkaQueueDescriptor;
+    private static readonly KafkaConnectionListenerDescriptor;
     private static readonly KafkaConnectionDescriptor;
     private static readonly KafkaQueueFactoryDescriptor;
     /**

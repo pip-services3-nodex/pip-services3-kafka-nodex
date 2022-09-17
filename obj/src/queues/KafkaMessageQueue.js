@@ -10,15 +10,18 @@ var __awaiter = (this && this.__awaiter) || function (thisArg, _arguments, P, ge
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.KafkaMessageQueue = void 0;
+/** @module queues */
 const pip_services3_commons_nodex_1 = require("pip-services3-commons-nodex");
 const pip_services3_commons_nodex_2 = require("pip-services3-commons-nodex");
 const pip_services3_commons_nodex_3 = require("pip-services3-commons-nodex");
 const pip_services3_commons_nodex_4 = require("pip-services3-commons-nodex");
+const pip_services3_commons_nodex_5 = require("pip-services3-commons-nodex");
 const pip_services3_components_nodex_1 = require("pip-services3-components-nodex");
 const pip_services3_messaging_nodex_1 = require("pip-services3-messaging-nodex");
 const pip_services3_messaging_nodex_2 = require("pip-services3-messaging-nodex");
 const pip_services3_messaging_nodex_3 = require("pip-services3-messaging-nodex");
 const KafkaConnection_1 = require("../connect/KafkaConnection");
+const KafkaConnectionListener_1 = require("../connect/KafkaConnectionListener");
 /**
  * Message queue that sends and receives messages via Kafka message broker.
  *
@@ -41,12 +44,10 @@ const KafkaConnection_1 = require("../connect/KafkaConnection");
  *   - username:                    user name
  *   - password:                    user password
  * - options:
- *   - num_partitions:       (optional) number of partitions of the created topic (default: 1)
- *   - replication_factor:   (optional) kafka replication factor of the topic (default: 1)
- *   - readable_partitions:      (optional) list of partition indexes to be read (default: all)
+ *   - listen_connection:    (optional) listening if the connection is alive (default: false)
+ *   - read_partitions:      (optional) list of partition indexes to be read (default: all)
  *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - autosubscribe:        (optional) true to automatically subscribe on option (default: false)
- *   - acks                  (optional) control the number of required acks: -1 - all, 0 - none, 1 - only leader (default: -1)
  *   - log_level:            (optional) log level 0 - None, 1 - Error, 2 - Warn, 3 - Info, 4 - Debug (default: 1)
  *   - connect_timeout:      (optional) number of milliseconds to connect to broker (default: 1000)
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
@@ -98,14 +99,12 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
         /**
          * The dependency resolver.
          */
-        this._dependencyResolver = new pip_services3_commons_nodex_4.DependencyResolver(KafkaMessageQueue._defaultConfig);
+        this._dependencyResolver = new pip_services3_commons_nodex_5.DependencyResolver(KafkaMessageQueue._defaultConfig);
         /**
          * The logger.
          */
         this._logger = new pip_services3_components_nodex_1.CompositeLogger();
         this._autoCommit = true;
-        this._readPartitions = 1;
-        this._acks = -1;
         this._messages = [];
     }
     /**
@@ -120,10 +119,15 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
         this._topic = config.getAsStringWithDefault("topic", this._topic);
         this._groupId = config.getAsStringWithDefault("group_id", this._groupId);
         this._fromBeginning = config.getAsBooleanWithDefault("from_beginning", this._fromBeginning);
-        this._readPartitions = config.getAsIntegerWithDefault("read_partitions", this._readPartitions);
         this._autoCommit = config.getAsBooleanWithDefault("autocommit", this._autoCommit);
         this._autoSubscribe = config.getAsBooleanWithDefault("options.autosubscribe", this._autoSubscribe);
-        this._acks = config.getAsIntegerWithDefault("options.acks", this._acks);
+        this._writePartition = config.getAsIntegerWithDefault('options.write_partition', this._writePartition);
+        let partitions = config.getAsNullableString('options.read_partitions');
+        partitions = partitions != null ? partitions.split(';') : [];
+        for (let index = 0; index < partitions.length; index++)
+            partitions[index] = parseInt(partitions[index]);
+        this._readablePartitions = partitions.length > 0 ? partitions : this._readablePartitions;
+        this._listenConnection = config.getAsBoolean("options.listen_connection");
     }
     /**
      * Sets references to dependent components.
@@ -139,6 +143,8 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
         // Or create a local one
         if (this._connection == null) {
             this._connection = this.createConnection();
+            if (this._listenConnection)
+                this._connectionListener = this.createConnectionListener();
             this._localConnection = true;
         }
         else {
@@ -153,13 +159,33 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
     }
     createConnection() {
         let connection = new KafkaConnection_1.KafkaConnection();
+        let reference = new pip_services3_commons_nodex_1.Reference(new pip_services3_commons_nodex_1.Descriptor("pip-services", "connection", "kafka", "*", "1.0"), connection);
         if (this._config) {
             connection.configure(this._config);
         }
         if (this._references) {
             connection.setReferences(this._references);
+            this._references.put(reference.getLocator(), reference.getComponent());
+        }
+        else {
+            this._references = pip_services3_commons_nodex_1.References.fromTuples(reference.getLocator(), reference.getComponent());
         }
         return connection;
+    }
+    createConnectionListener() {
+        let connectionListener = new KafkaConnectionListener_1.KafkaConnectionListener();
+        let reference = new pip_services3_commons_nodex_1.Reference(new pip_services3_commons_nodex_1.Descriptor("pip-services", "connection-listener", "kafka", "*", "1.0"), connectionListener);
+        if (this._config) {
+            connectionListener.configure(this._config);
+        }
+        if (this._references) {
+            connectionListener.setReferences(this._references);
+            this._references.put(reference.getLocator(), reference.getComponent());
+        }
+        else {
+            this._references = pip_services3_commons_nodex_1.References.fromTuples(reference.getLocator(), reference.getComponent());
+        }
+        return connectionListener;
     }
     /**
      * Checks if the component is opened.
@@ -181,13 +207,17 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
             }
             if (this._connection == null) {
                 this._connection = this.createConnection();
+                if (this._listenConnection)
+                    this._connectionListener = this.createConnectionListener();
                 this._localConnection = true;
             }
             if (this._localConnection) {
                 yield this._connection.open(correlationId);
+                if (this._listenConnection)
+                    yield this._connectionListener.open(correlationId);
             }
             if (!this._connection.isOpen()) {
-                throw new pip_services3_commons_nodex_2.ConnectionException(correlationId, "CONNECT_FAILED", "Kafka connection is not opened");
+                throw new pip_services3_commons_nodex_3.ConnectionException(correlationId, "CONNECT_FAILED", "Kafka connection is not opened");
             }
             // create topic if it does not exist
             let topics = yield this._connection.readQueueNames();
@@ -211,10 +241,12 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
                 return;
             }
             if (this._connection == null) {
-                throw new pip_services3_commons_nodex_3.InvalidStateException(correlationId, 'NO_CONNECTION', 'Kafka connection is missing');
+                throw new pip_services3_commons_nodex_4.InvalidStateException(correlationId, 'NO_CONNECTION', 'Kafka connection is missing');
             }
             if (this._localConnection) {
                 yield this._connection.close(correlationId);
+                if (this._listenConnection)
+                    yield this._connectionListener.close(correlationId);
             }
             // Unsubscribe from the topic
             if (this._subscribed) {
@@ -239,8 +271,7 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
             let topic = this.getTopic();
             let options = {
                 fromBeginning: this._fromBeginning,
-                autoCommit: this._autoCommit,
-                partitionsConsumedConcurrently: this._readPartitions
+                autoCommit: this._autoCommit
             };
             yield this._connection.subscribe(topic, this._groupId, options, this);
             this._subscribed = true;
@@ -292,20 +323,22 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
             // if (expectedTopic.indexOf("*") < 0 && expectedTopic != topic) {
             //     return;
             // }
-            // Deserialize message
-            let message = this.toMessage(msg);
-            if (message == null) {
-                this._logger.error(null, null, "Failed to read received message");
-                return;
-            }
-            this._counters.incrementOne("queue." + this.getName() + ".received_messages");
-            this._logger.debug(message.correlation_id, "Received message %s via %s", message, this.getName());
-            // Send message to receiver if its set or put it into the queue
-            if (this._receiver != null) {
-                this.sendMessageToReceiver(this._receiver, message);
-            }
-            else {
-                this._messages.push(message);
+            if (this._readablePartitions == null || this._readablePartitions.length == 0 || this._readablePartitions.includes(partition)) {
+                // Deserialize message
+                let message = this.toMessage(msg);
+                if (message == null) {
+                    this._logger.error(null, null, "Failed to read received message");
+                    return;
+                }
+                this._counters.incrementOne("queue." + this.getName() + ".received_messages");
+                this._logger.debug(message.correlation_id, "Received message %s via %s", message, this.getName());
+                // Send message to receiver if its set or put it into the queue
+                if (this._receiver != null) {
+                    this.sendMessageToReceiver(this._receiver, message);
+                }
+                else {
+                    this._messages.push(message);
+                }
             }
         });
     }
@@ -422,8 +455,8 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
             this._logger.debug(message.correlation_id, "Sent message %s via %s", message.toString(), this.toString());
             let msg = this.fromMessage(message);
             let topic = this.getName() || this._topic;
-            let options = { acks: this._acks };
-            yield this._connection.publish(topic, [msg], options);
+            msg.partition = this._writePartition;
+            yield this._connection.publish(topic, [msg]);
         });
     }
     /**
@@ -550,5 +583,5 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
     }
 }
 exports.KafkaMessageQueue = KafkaMessageQueue;
-KafkaMessageQueue._defaultConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples("topic", null, "group_id", "default", "from_beginning", false, "read_partitions", 1, "autocommit", true, "options.autosubscribe", false, "options.acks", -1, "options.log_level", 1, "options.connect_timeout", 1000, "options.retry_timeout", 30000, "options.max_retries", 5, "options.request_timeout", 30000);
+KafkaMessageQueue._defaultConfig = pip_services3_commons_nodex_2.ConfigParams.fromTuples("topic", null, "group_id", "default", "from_beginning", false, "read_partitions", 1, "autocommit", true, "options.autosubscribe", false, "options.acks", -1, "options.log_level", 1, "options.connect_timeout", 1000, "options.retry_timeout", 30000, "options.max_retries", 5, "options.request_timeout", 30000, "options.listen_connection", false);
 //# sourceMappingURL=KafkaMessageQueue.js.map

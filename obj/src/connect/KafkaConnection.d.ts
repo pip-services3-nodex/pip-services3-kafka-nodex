@@ -27,15 +27,15 @@ import { KafkaSubscription } from './KafkaSubscription';
  *   - username:                  user name
  *   - password:                  user password
  * - options:
+ *   - acks                  (optional) control the number of required acks: -1 - all, 0 - none, 1 - only leader (default: -1)
  *   - num_partitions:       (optional) number of partitions of the created topic (default: 1)
  *   - replication_factor:   (optional) kafka replication factor of the topic (default: 1)
- *   - readable_partitions:      (optional) list of partition indexes to be read (default: all)
- *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - log_level:            (optional) log level 0 - None, 1 - Error, 2 - Warn, 3 - Info, 4 - Debug (default: 1)
  *   - connect_timeout:      (optional) number of milliseconds to connect to broker (default: 1000)
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
  *   - retry_timeout:        (optional) number of milliseconds to wait on each reconnection attempt (default: 30000)
  *   - request_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
+ *   - session_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
  *
  * ### References ###
  *
@@ -80,14 +80,14 @@ export declare class KafkaConnection implements IMessageQueueConnection, IRefere
     protected _subscriptions: KafkaSubscription[];
     protected _clientId: string;
     protected _logLevel: number;
+    protected _acks: number;
     protected _connectTimeout: number;
     protected _maxRetries: number;
     protected _retryTimeout: number;
     protected _requestTimeout: number;
     protected _numPartitions: number;
     protected _replicationFactor: number;
-    protected _writePartition: number;
-    protected _readablePartitions: number[];
+    protected _sessionTimeout: number;
     /**
      * Creates a new instance of the connection component.
      */
@@ -157,7 +157,7 @@ export declare class KafkaConnection implements IMessageQueueConnection, IRefere
      * @param messages a list of messages to be published
      * @param options publishing options
      */
-    publish(topic: string, messages: any[], options: any): Promise<void>;
+    publish(topic: string, messages: any[]): Promise<void>;
     /**
      * Subscribe to a topic
      * @param subject a subject(topic) name
