@@ -21,8 +21,9 @@ import { KafkaConnection } from "./KafkaConnection";
  *    - check_interval (default: 1m)
  * ### References ###
  * 
- * - <code>\*:logger:\*:\*:1.0</code>           (optional) [[https://pip-services3-nodex.github.io/pip-services3-components-nodex/interfaces/log.ilogger.html ILogger]] components to pass log messages
- * - <code>\*:connection:kafka:\*:1.0</code>       (optional) Shared connection to Kafka service
+ * - <code>\*:logger:\*:\*:1.0</code>            (optional) [[https://pip-services3-nodex.github.io/pip-services3-components-nodex/interfaces/log.ilogger.html ILogger]] components to pass log messages
+ * - <code>\*:connection:kafka:\*:1.0</code>     Shared connection to Kafka service
+ * - <code>\*:message-queue:kafka:\*:1.0</code>  Kafka message queue
  * 
  */
 export class KafkaConnectionListener implements IOpenable, IConfigurable, IReferenceable {
