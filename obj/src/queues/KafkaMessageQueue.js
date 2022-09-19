@@ -244,9 +244,9 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
                 throw new pip_services3_commons_nodex_4.InvalidStateException(correlationId, 'NO_CONNECTION', 'Kafka connection is missing');
             }
             if (this._localConnection) {
-                yield this._connection.close(correlationId);
                 if (this._listenConnection)
                     yield this._connectionListener.close(correlationId);
+                yield this._connection.close(correlationId);
             }
             // Unsubscribe from the topic
             if (this._subscribed) {

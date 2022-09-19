@@ -107,7 +107,7 @@ export class KafkaMessageQueue extends MessageQueue
     private _references: IReferences;
     private _opened: boolean;
     private _localConnection: boolean;
-    protected _listenConnection: boolean;
+    private _listenConnection: boolean;
 
     /**
      * The dependency resolver.
@@ -318,10 +318,10 @@ export class KafkaMessageQueue extends MessageQueue
         }
 
         if (this._localConnection) {
-            await this._connection.close(correlationId);
-
             if (this._listenConnection)
                 await this._connectionListener.close(correlationId);
+
+            await this._connection.close(correlationId);
         }
         
         // Unsubscribe from the topic

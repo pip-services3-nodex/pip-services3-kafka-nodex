@@ -85,7 +85,7 @@ export declare class KafkaMessageQueue extends MessageQueue implements IReferenc
     private _references;
     private _opened;
     private _localConnection;
-    protected _listenConnection: boolean;
+    private _listenConnection;
     /**
      * The dependency resolver.
      */
