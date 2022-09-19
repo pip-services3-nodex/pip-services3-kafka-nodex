@@ -23,6 +23,7 @@ const pip_services3_components_nodex_1 = require("pip-services3-components-nodex
  * - correlation_id:        (optional) transaction id to trace execution through call chain (default: KafkaConnectionListener).
  * - options:
  *    - reconnect (default: true)
+ *    - resubscribe (default: true)
  *    - check_interval (default: 1m)
  * ### References ###
  *
@@ -32,7 +33,7 @@ const pip_services3_components_nodex_1 = require("pip-services3-components-nodex
  */
 class KafkaConnectionListener {
     constructor() {
-        this._defaultConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples("correlation_id", "KafkaConnectionListener", "options.log_level", 1, "options.reconnect", true, "options.check_interval", 60000);
+        this._defaultConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples("correlation_id", "KafkaConnectionListener", "options.log_level", 1, "options.reconnect", true, "options.resubscribe", true, "options.check_interval", 60000);
         /**
          * The logger.
          */
@@ -47,7 +48,12 @@ class KafkaConnectionListener {
         config = config.setDefaults(this._defaultConfig);
         this._correlationId = config.getAsString("correlation_id");
         this._reconnect = config.getAsBoolean("options.reconnect");
+        this._resubscribe = config.getAsBoolean("options.resubscribe");
         this._checkInerval = config.getAsInteger("options.check_interval");
+        // config from queue params
+        this._autoCommit = config.getAsBooleanWithDefault("autocommit", this._autoCommit);
+        this._groupId = config.getAsStringWithDefault("group_id", this._groupId);
+        this._topic = config.getAsStringWithDefault("topic", this._topic);
     }
     /**
      * Sets references to dependent components.
@@ -57,6 +63,7 @@ class KafkaConnectionListener {
     setReferences(references) {
         this._logger.setReferences(references);
         this.connection = references.getOneRequired(new pip_services3_commons_nodex_1.Descriptor("pip-services", "connection", "kafka", "*", "*"));
+        this.queue = references.getOneRequired(new pip_services3_commons_nodex_1.Descriptor("pip-services", "message-queue", "kafka", "*", "*"));
     }
     /**
      * Checks if connection listener is open
@@ -92,19 +99,48 @@ class KafkaConnectionListener {
             }
         });
     }
+    reConnect() {
+        return __awaiter(this, void 0, void 0, function* () {
+            this._logger.trace(this._correlationId, "Kafka connection is lost");
+            // Recreate connection
+            if (this._reconnect) {
+                this._logger.trace(this._correlationId, "Try Kafka reopen connection");
+                yield this.connection.close(this._correlationId);
+                yield this.connection.open(this._correlationId);
+            }
+        });
+    }
+    reSubscribe() {
+        return __awaiter(this, void 0, void 0, function* () {
+            if (this._resubscribe) {
+                // Resubscribe on the topic
+                let options = {
+                    fromBeginning: false,
+                    autoCommit: this._autoCommit
+                };
+                yield this.connection.subscribe(this._topic, this._groupId, options, this.queue);
+                this._logger.trace(this._correlationId, "Resubscribed on the topic " + this._topic);
+            }
+        });
+    }
     checkConnection(context) {
+        let isReady = true; // lock if contex will be switch in background
         return () => __awaiter(this, void 0, void 0, function* () {
             try {
                 // try to get topics list
                 yield context.connection.readQueueNames();
             }
             catch (ex) {
-                this._logger.trace(this._correlationId, "Kafka connection is lost");
-                // Recreate connection
-                if (this._reconnect) {
-                    this._logger.trace(this._correlationId, "Try Kafka reopen connection");
-                    yield context.connection.close(this._correlationId);
-                    yield context.connection.open(this._correlationId);
+                if (isReady) {
+                    isReady = false;
+                    try {
+                        yield context.reConnect();
+                        yield context.reSubscribe();
+                    }
+                    catch (_a) {
+                        // do nothing...
+                    }
+                    isReady = true;
                 }
             }
         });

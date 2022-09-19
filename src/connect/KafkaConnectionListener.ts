@@ -2,6 +2,7 @@
 
 import { ConfigParams, Descriptor, FixedRateTimer, IConfigurable, IOpenable, IReferenceable, IReferences } from "pip-services3-commons-nodex";
 import { CompositeLogger } from "pip-services3-components-nodex";
+import { KafkaMessageQueue } from "../queues";
 import { KafkaConnection } from "./KafkaConnection";
 
 
@@ -16,6 +17,7 @@ import { KafkaConnection } from "./KafkaConnection";
  * - correlation_id:        (optional) transaction id to trace execution through call chain (default: KafkaConnectionListener).
  * - options:
  *    - reconnect (default: true)
+ *    - resubscribe (default: true)
  *    - check_interval (default: 1m)
  * ### References ###
  * 
@@ -28,11 +30,17 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
         "correlation_id", "KafkaConnectionListener",
         "options.log_level", 1,
         "options.reconnect", true,
+        "options.resubscribe", true,
         "options.check_interval", 60000,
     );
 
+    private _topic: string;
+    private _groupId: string;
+    private _autoCommit: boolean;
+
     private timer: FixedRateTimer;
     private connection: KafkaConnection;
+    private queue: KafkaMessageQueue;
 
     /** 
      * The logger.
@@ -41,6 +49,9 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
     
     // Flag for reconection to kafka
     private _reconnect: boolean;
+
+    // Flag for resubscribe of the topic queu
+    private _resubscribe: boolean;
 
     // Delay of check and reconnect try
     private _checkInerval: number;
@@ -57,7 +68,13 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
 
         this._correlationId = config.getAsString("correlation_id");
         this._reconnect = config.getAsBoolean("options.reconnect");
+        this._resubscribe = config.getAsBoolean("options.resubscribe");
         this._checkInerval = config.getAsInteger("options.check_interval");
+
+        // config from queue params
+        this._autoCommit = config.getAsBooleanWithDefault("autocommit", this._autoCommit);
+        this._groupId = config.getAsStringWithDefault("group_id", this._groupId);
+        this._topic = config.getAsStringWithDefault("topic", this._topic);
     }
 
     /**
@@ -68,6 +85,7 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
     public setReferences(references: IReferences): void {
         this._logger.setReferences(references);
         this.connection = references.getOneRequired<KafkaConnection>(new Descriptor("pip-services", "connection", "kafka", "*", "*"));
+        this.queue = references.getOneRequired<KafkaMessageQueue>(new Descriptor("pip-services", "message-queue", "kafka", "*", "*"));
     }
     
     /**
@@ -103,24 +121,53 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
         }
     }
 
+    private async reConnect(): Promise<void> {
+        this._logger.trace(this._correlationId, "Kafka connection is lost");
+
+        // Recreate connection
+        if (this._reconnect) {
+            this._logger.trace(this._correlationId, "Try Kafka reopen connection");
+
+            await this.connection.close(this._correlationId);
+            await this.connection.open(this._correlationId);
+        }
+    }
+
+    private async reSubscribe() :Promise<void> {
+        if (this._resubscribe) {
+            // Resubscribe on the topic
+            let options = {
+                fromBeginning: false,
+                autoCommit: this._autoCommit
+            };
+
+            await this.connection.subscribe(this._topic, this._groupId, options, this.queue);
+
+            this._logger.trace(this._correlationId, "Resubscribed on the topic " + this._topic);
+        }
+    }
+
     private checkConnection(context: any): () => Promise<void> {
+        let isReady: boolean = true; // lock if contex will be switch in background
         return async () => {
             try {
                 // try to get topics list
                 await context.connection.readQueueNames();
             } catch (ex) {
-                this._logger.trace(this._correlationId, "Kafka connection is lost");
-                
-                // Recreate connection
-                if (this._reconnect) {
-                    this._logger.trace(this._correlationId, "Try Kafka reopen connection");
+                if (isReady) {
+                    isReady = false;
 
-                    await context.connection.close(this._correlationId);
-                    await context.connection.open(this._correlationId);
+                    try {
+                        await context.reConnect();
+                        await context.reSubscribe()
+
+                    } catch {
+                        // do nothing...
+                    }
+
+                    isReady = true
                 }
-                    
             }
         }
     }
-    
 }
