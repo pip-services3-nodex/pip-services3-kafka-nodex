@@ -207,7 +207,7 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
             let connection = new kafka.Kafka(options);
             let producer = connection.producer();
             await producer.connect();
-
+            
             this._connection = connection;
             this._producer = producer;
 
@@ -370,32 +370,6 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
             rebalanceTimeout: options.rebalanceTimeout,
             allowAutoTopicCreation: true
         });
-
-        // kafka heartbeat
-        const { HEARTBEAT } = consumer.events
-        let lastHeartbeat: number;
-        consumer.on(HEARTBEAT, async ({ timestamp }) => await isHealthy(timestamp))
-         
-        const isHealthy = async (timestamp) => {
-            lastHeartbeat = timestamp;
-            // Consumer has heartbeat within the session timeout,
-            // so it is healthy
-            if (Date.now() - lastHeartbeat < this._sessionTimeout) {
-                return true;
-            } else {
-                // try to get group describe
-                try {
-                   await consumer.describeGroup(); 
-                } catch(ex) {
-                    let config = await this._connectionResolver.resolve("kafka-heartbeat");
-                    let brokers = config.getAsString("brokers");
-                    throw new ConnectionException("kafka-heartbeat", "CANNOT_CONNECT", "Connection to Kafka service failed")
-                        .withDetails("brokers", brokers);
-                }
-
-                return true;
-            }
-        }
 
         try {
             await consumer.connect();

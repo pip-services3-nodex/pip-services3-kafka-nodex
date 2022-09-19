@@ -315,31 +315,6 @@ class KafkaConnection {
                 rebalanceTimeout: options.rebalanceTimeout,
                 allowAutoTopicCreation: true
             });
-            // kafka heartbeat
-            const { HEARTBEAT } = consumer.events;
-            let lastHeartbeat;
-            consumer.on(HEARTBEAT, ({ timestamp }) => __awaiter(this, void 0, void 0, function* () { return yield isHealthy(timestamp); }));
-            const isHealthy = (timestamp) => __awaiter(this, void 0, void 0, function* () {
-                lastHeartbeat = timestamp;
-                // Consumer has heartbeat within the session timeout,
-                // so it is healthy
-                if (Date.now() - lastHeartbeat < this._sessionTimeout) {
-                    return true;
-                }
-                else {
-                    // try to get group describe
-                    try {
-                        yield consumer.describeGroup();
-                    }
-                    catch (ex) {
-                        let config = yield this._connectionResolver.resolve("kafka-heartbeat");
-                        let brokers = config.getAsString("brokers");
-                        throw new pip_services3_commons_nodex_2.ConnectionException("kafka-heartbeat", "CANNOT_CONNECT", "Connection to Kafka service failed")
-                            .withDetails("brokers", brokers);
-                    }
-                    return true;
-                }
-            });
             try {
                 yield consumer.connect();
                 yield consumer.subscribe({
