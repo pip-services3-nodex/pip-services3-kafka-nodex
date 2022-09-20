@@ -10,9 +10,10 @@ import { CompositeLogger } from "pip-services3-components-nodex";
  * ### Configuration parameters ###
  * - correlation_id:        (optional) transaction id to trace execution through call chain (default: KafkaConnectionListener).
  * - options:
- *    - reconnect (default: true)
- *    - resubscribe (default: true)
- *    - check_interval (default: 1m)
+ *    - reconnect (default: true)       (optional) auto reconnect to the queue if lost connection
+ *    - autosubscribe (default: true)   (optional) autosubscribe on the topic when reconnect
+ *    - check_interval (default: 1m)    (optional) interval for checking connection alive
+ *
  * ### References ###
  *
  * - <code>\*:logger:\*:\*:1.0</code>            (optional) [[https://pip-services3-nodex.github.io/pip-services3-components-nodex/interfaces/log.ilogger.html ILogger]] components to pass log messages
@@ -27,13 +28,13 @@ export declare class KafkaConnectionListener implements IOpenable, IConfigurable
     private _autoCommit;
     private timer;
     private connection;
-    private queue;
+    private receiver;
     /**
      * The logger.
      */
     protected _logger: CompositeLogger;
     private _reconnect;
-    private _resubscribe;
+    private _autosubscribe;
     private _checkInerval;
     private _correlationId;
     /**

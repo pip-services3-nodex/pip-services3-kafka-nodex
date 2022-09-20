@@ -2,7 +2,7 @@
 
 import { ConfigParams, Descriptor, FixedRateTimer, IConfigurable, IOpenable, IReferenceable, IReferences } from "pip-services3-commons-nodex";
 import { CompositeLogger } from "pip-services3-components-nodex";
-import { KafkaMessageQueue } from "../queues";
+import { IKafkaMessageListener } from "./IKafkaMessageListener";
 import { KafkaConnection } from "./KafkaConnection";
 
 
@@ -16,9 +16,10 @@ import { KafkaConnection } from "./KafkaConnection";
  * ### Configuration parameters ###
  * - correlation_id:        (optional) transaction id to trace execution through call chain (default: KafkaConnectionListener).
  * - options:
- *    - reconnect (default: true)
- *    - resubscribe (default: true)
- *    - check_interval (default: 1m)
+ *    - reconnect (default: true)       (optional) auto reconnect to the queue if lost connection
+ *    - autosubscribe (default: true)   (optional) autosubscribe on the topic when reconnect 
+ *    - check_interval (default: 1m)    (optional) interval for checking connection alive
+ * 
  * ### References ###
  * 
  * - <code>\*:logger:\*:\*:1.0</code>            (optional) [[https://pip-services3-nodex.github.io/pip-services3-components-nodex/interfaces/log.ilogger.html ILogger]] components to pass log messages
@@ -31,7 +32,7 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
         "correlation_id", "KafkaConnectionListener",
         "options.log_level", 1,
         "options.reconnect", true,
-        "options.resubscribe", true,
+        "options.autosubscribe", true,
         "options.check_interval", 60000,
     );
 
@@ -41,7 +42,7 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
 
     private timer: FixedRateTimer;
     private connection: KafkaConnection;
-    private queue: KafkaMessageQueue;
+    private receiver: IKafkaMessageListener;
 
     /** 
      * The logger.
@@ -51,8 +52,8 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
     // Flag for reconection to kafka
     private _reconnect: boolean;
 
-    // Flag for resubscribe of the topic queu
-    private _resubscribe: boolean;
+    // Flag for autosubscribe of the topic queu
+    private _autosubscribe: boolean;
 
     // Delay of check and reconnect try
     private _checkInerval: number;
@@ -69,7 +70,7 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
 
         this._correlationId = config.getAsString("correlation_id");
         this._reconnect = config.getAsBoolean("options.reconnect");
-        this._resubscribe = config.getAsBoolean("options.resubscribe");
+        this._autosubscribe = config.getAsBoolean("options.autosubscribe");
         this._checkInerval = config.getAsInteger("options.check_interval");
 
         // config from queue params
@@ -86,7 +87,7 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
     public setReferences(references: IReferences): void {
         this._logger.setReferences(references);
         this.connection = references.getOneRequired<KafkaConnection>(new Descriptor("pip-services", "connection", "kafka", "*", "*"));
-        this.queue = references.getOneRequired<KafkaMessageQueue>(new Descriptor("pip-services", "message-queue", "kafka", "*", "*"));
+        this.receiver = references.getOneRequired<IKafkaMessageListener>(new Descriptor("pip-services", "message-queue", "kafka", "*", "*"));
     }
     
     /**
@@ -135,14 +136,14 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
     }
 
     private async reSubscribe() :Promise<void> {
-        if (this._resubscribe) {
+        if (this._autosubscribe) {
             // Resubscribe on the topic
             let options = {
                 fromBeginning: false,
                 autoCommit: this._autoCommit
             };
 
-            await this.connection.subscribe(this._topic, this._groupId, options, this.queue);
+            await this.connection.subscribe(this._topic, this._groupId, options, this.receiver);
 
             this._logger.trace(this._correlationId, "Resubscribed on the topic " + this._topic);
         }

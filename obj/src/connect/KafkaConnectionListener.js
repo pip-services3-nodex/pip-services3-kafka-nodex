@@ -22,9 +22,10 @@ const pip_services3_components_nodex_1 = require("pip-services3-components-nodex
  * ### Configuration parameters ###
  * - correlation_id:        (optional) transaction id to trace execution through call chain (default: KafkaConnectionListener).
  * - options:
- *    - reconnect (default: true)
- *    - resubscribe (default: true)
- *    - check_interval (default: 1m)
+ *    - reconnect (default: true)       (optional) auto reconnect to the queue if lost connection
+ *    - autosubscribe (default: true)   (optional) autosubscribe on the topic when reconnect
+ *    - check_interval (default: 1m)    (optional) interval for checking connection alive
+ *
  * ### References ###
  *
  * - <code>\*:logger:\*:\*:1.0</code>            (optional) [[https://pip-services3-nodex.github.io/pip-services3-components-nodex/interfaces/log.ilogger.html ILogger]] components to pass log messages
@@ -34,7 +35,7 @@ const pip_services3_components_nodex_1 = require("pip-services3-components-nodex
  */
 class KafkaConnectionListener {
     constructor() {
-        this._defaultConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples("correlation_id", "KafkaConnectionListener", "options.log_level", 1, "options.reconnect", true, "options.resubscribe", true, "options.check_interval", 60000);
+        this._defaultConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples("correlation_id", "KafkaConnectionListener", "options.log_level", 1, "options.reconnect", true, "options.autosubscribe", true, "options.check_interval", 60000);
         /**
          * The logger.
          */
@@ -49,7 +50,7 @@ class KafkaConnectionListener {
         config = config.setDefaults(this._defaultConfig);
         this._correlationId = config.getAsString("correlation_id");
         this._reconnect = config.getAsBoolean("options.reconnect");
-        this._resubscribe = config.getAsBoolean("options.resubscribe");
+        this._autosubscribe = config.getAsBoolean("options.autosubscribe");
         this._checkInerval = config.getAsInteger("options.check_interval");
         // config from queue params
         this._autoCommit = config.getAsBooleanWithDefault("autocommit", this._autoCommit);
@@ -64,7 +65,7 @@ class KafkaConnectionListener {
     setReferences(references) {
         this._logger.setReferences(references);
         this.connection = references.getOneRequired(new pip_services3_commons_nodex_1.Descriptor("pip-services", "connection", "kafka", "*", "*"));
-        this.queue = references.getOneRequired(new pip_services3_commons_nodex_1.Descriptor("pip-services", "message-queue", "kafka", "*", "*"));
+        this.receiver = references.getOneRequired(new pip_services3_commons_nodex_1.Descriptor("pip-services", "message-queue", "kafka", "*", "*"));
     }
     /**
      * Checks if connection listener is open
@@ -113,13 +114,13 @@ class KafkaConnectionListener {
     }
     reSubscribe() {
         return __awaiter(this, void 0, void 0, function* () {
-            if (this._resubscribe) {
+            if (this._autosubscribe) {
                 // Resubscribe on the topic
                 let options = {
                     fromBeginning: false,
                     autoCommit: this._autoCommit
                 };
-                yield this.connection.subscribe(this._topic, this._groupId, options, this.queue);
+                yield this.connection.subscribe(this._topic, this._groupId, options, this.receiver);
                 this._logger.trace(this._correlationId, "Resubscribed on the topic " + this._topic);
             }
         });
