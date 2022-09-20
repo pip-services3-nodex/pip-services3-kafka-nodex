@@ -154,7 +154,10 @@ export class KafkaConnectionListener implements IOpenable, IConfigurable, IRefer
         return async () => {
             try {
                 // try to get topics list
-                await context.connection.readQueueNames();
+                if (context.connection.isOpen())
+                    await context.connection.readQueueNames();
+                else 
+                    throw Error("Lost connection");
             } catch (ex) {
                 if (isReady) {
                     isReady = false;

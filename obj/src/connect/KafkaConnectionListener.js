@@ -35,7 +35,7 @@ const pip_services3_components_nodex_1 = require("pip-services3-components-nodex
  */
 class KafkaConnectionListener {
     constructor() {
-        this._defaultConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples("correlation_id", "KafkaConnectionListener", "options.log_level", 1, "options.reconnect", true, "options.autosubscribe", true, "options.check_interval", 60000);
+        this._defaultConfig = pip_services3_commons_nodex_1.ConfigParams.fromTuples("correlation_id", "KafkaConnectionListener", "options.log_level", 1, "options.reconnect", true, "options.autosubscribe", true, "options.check_interval", 500);
         /**
          * The logger.
          */
@@ -130,7 +130,10 @@ class KafkaConnectionListener {
         return () => __awaiter(this, void 0, void 0, function* () {
             try {
                 // try to get topics list
-                yield context.connection.readQueueNames();
+                if (context.connection.isOpen())
+                    yield context.connection.readQueueNames();
+                else
+                    throw Error("Lost connection");
             }
             catch (ex) {
                 if (isReady) {
