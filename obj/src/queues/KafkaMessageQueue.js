@@ -175,8 +175,13 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
     createConnectionListener() {
         let connectionListener = new KafkaConnectionListener_1.KafkaConnectionListener();
         let reference = new pip_services3_commons_nodex_1.Reference(new pip_services3_commons_nodex_1.Descriptor("pip-services", "connection-listener", "kafka", "*", "1.0"), connectionListener);
+        let queueDescriptor = new pip_services3_commons_nodex_1.Descriptor("pip-services", "message-queue", "kafka", "*", "1.0");
         if (this._config) {
             connectionListener.configure(this._config);
+        }
+        // add queue in references
+        if (this._references.getOneOptional(queueDescriptor) == null) {
+            this._references.put(queueDescriptor, this);
         }
         if (this._references) {
             connectionListener.setReferences(this._references);

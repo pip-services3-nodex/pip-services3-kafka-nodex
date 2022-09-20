@@ -229,9 +229,15 @@ export class KafkaMessageQueue extends MessageQueue
     private createConnectionListener(): KafkaConnectionListener {
         let connectionListener = new KafkaConnectionListener();
         let reference = new Reference(new Descriptor("pip-services", "connection-listener", "kafka", "*", "1.0"), connectionListener);
+        let queueDescriptor = new Descriptor("pip-services", "message-queue", "kafka", "*", "1.0");
 
         if (this._config) {
             connectionListener.configure(this._config);
+        }
+
+        // add queue in references
+        if (this._references.getOneOptional(queueDescriptor) == null) {
+            this._references.put(queueDescriptor, this);
         }
 
         if (this._references) {
