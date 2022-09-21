@@ -406,11 +406,16 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
                 await restartConsumer(event);
             })
 
+            let isReady = true;
+
             const restartConsumer = async (event) => {
                 let err = event != null && event.payload != null ? event.payload.error : new Error("Consummer disconnected");
                 this._logger.error(null, err, "Consummer crashed, try restart");
 
                 while (true) {
+                    if (!isReady) continue;
+
+                    isReady = false;
                     try {
                         this._logger.trace(null, "Try restart consummer");
                         // restart consumer
@@ -434,6 +439,8 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
                     }
                     catch {
                         // do nothing...
+                    } finally {
+                        isReady = true;
                     }
                 }
             }

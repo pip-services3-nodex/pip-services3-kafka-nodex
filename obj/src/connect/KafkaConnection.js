@@ -345,10 +345,14 @@ class KafkaConnection {
                 consumer.on(REQUEST_TIMEOUT, (event) => __awaiter(this, void 0, void 0, function* () {
                     yield restartConsumer(event);
                 }));
+                let isReady = true;
                 const restartConsumer = (event) => __awaiter(this, void 0, void 0, function* () {
                     let err = event != null && event.payload != null ? event.payload.error : new Error("Consummer disconnected");
                     this._logger.error(null, err, "Consummer crashed, try restart");
                     while (true) {
+                        if (!isReady)
+                            continue;
+                        isReady = false;
                         try {
                             this._logger.trace(null, "Try restart consummer");
                             // restart consumer
@@ -371,6 +375,9 @@ class KafkaConnection {
                         }
                         catch (_a) {
                             // do nothing...
+                        }
+                        finally {
+                            isReady = true;
                         }
                     }
                 });
