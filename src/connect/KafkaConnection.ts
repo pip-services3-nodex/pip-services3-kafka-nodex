@@ -436,23 +436,6 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
                         // do nothing...
                     }
                 }
-                // restart consumer
-                await consumer.connect();
-
-                await consumer.subscribe({
-                    topic: topic,
-                    fromBeginning: options.fromBeginning,
-                });
-
-                await consumer.run({
-                    partitionsConsumedConcurrently: options.partitionsConsumedConcurrently,
-                    autoCommit: options.autoCommit,
-                    autoCommitInterval: options.autoCommitInterval,
-                    autoCommitThreshold: options.autoCommitThreshold,
-                    eachMessage: async ({ topic, partition, message }) => {
-                        listener.onMessage(topic, partition, message);
-                    }
-                });
             }
         } catch(ex) {
             this._logger.error(null, ex, "Failed to connect Kafka consumer.");

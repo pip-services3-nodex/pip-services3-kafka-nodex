@@ -373,21 +373,6 @@ class KafkaConnection {
                             // do nothing...
                         }
                     }
-                    // restart consumer
-                    yield consumer.connect();
-                    yield consumer.subscribe({
-                        topic: topic,
-                        fromBeginning: options.fromBeginning,
-                    });
-                    yield consumer.run({
-                        partitionsConsumedConcurrently: options.partitionsConsumedConcurrently,
-                        autoCommit: options.autoCommit,
-                        autoCommitInterval: options.autoCommitInterval,
-                        autoCommitThreshold: options.autoCommitThreshold,
-                        eachMessage: ({ topic, partition, message }) => __awaiter(this, void 0, void 0, function* () {
-                            listener.onMessage(topic, partition, message);
-                        })
-                    });
                 });
             }
             catch (ex) {
