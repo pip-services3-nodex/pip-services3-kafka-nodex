@@ -16,7 +16,6 @@ import { MessagingCapabilities } from 'pip-services3-messaging-nodex';
 import { MessageEnvelope } from 'pip-services3-messaging-nodex';
 
 import { KafkaConnection } from '../connect/KafkaConnection';
-import { KafkaConnectionListener } from '../connect/KafkaConnectionListener';
 
 /**
  * Message queue that sends and receives messages via Kafka message broker.
@@ -40,7 +39,6 @@ import { KafkaConnectionListener } from '../connect/KafkaConnectionListener';
  *   - username:                    user name
  *   - password:                    user password
  * - options:
- *   - listen_connection:    (optional) listening if the connection is alive (default: false) 
  *   - read_partitions:      (optional) list of partition indexes to be read (default: all)
  *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - autosubscribe:        (optional) true to automatically subscribe on option (default: false)
@@ -107,7 +105,6 @@ export class KafkaMessageQueue extends MessageQueue
     private _references: IReferences;
     private _opened: boolean;
     private _localConnection: boolean;
-    private _listenConnection: boolean;
 
     /**
      * The dependency resolver.
@@ -122,11 +119,6 @@ export class KafkaMessageQueue extends MessageQueue
      * The Kafka connection component.
      */
     protected _connection: KafkaConnection;
-
-    /**
-     * The Kafka connection listener component.
-     */
-    protected _connectionListener: KafkaConnectionListener;
 
     protected _topic: string;
     protected _groupId: string;
@@ -175,7 +167,6 @@ export class KafkaMessageQueue extends MessageQueue
             partitions[index] = parseInt(partitions[index]);
 
         this._readablePartitions = partitions.length > 0 ? partitions : this._readablePartitions;
-        this._listenConnection = config.getAsBoolean("options.listen_connection");
     }
 
     /**
@@ -193,8 +184,6 @@ export class KafkaMessageQueue extends MessageQueue
         // Or create a local one
         if (this._connection == null) {
             this._connection = this.createConnection();
-            if (this._listenConnection) 
-                this._connectionListener = this.createConnectionListener();
             this._localConnection = true;
         } else {
             this._localConnection = false;
@@ -226,30 +215,6 @@ export class KafkaMessageQueue extends MessageQueue
         return connection;
     }
 
-    private createConnectionListener(): KafkaConnectionListener {
-        let connectionListener = new KafkaConnectionListener();
-        let reference = new Reference(new Descriptor("pip-services", "connection-listener", "kafka", "*", "1.0"), connectionListener);
-        let queueDescriptor = new Descriptor("pip-services", "message-queue", "kafka", "*", "1.0");
-
-        if (this._config) {
-            connectionListener.configure(this._config);
-        }
-
-        // add queue in references
-        if (this._references.getOneOptional(queueDescriptor) == null) {
-            this._references.put(queueDescriptor, this);
-        }
-
-        if (this._references) {
-            connectionListener.setReferences(this._references);
-            this._references.put(reference.getLocator(), reference.getComponent())
-        } else {
-            this._references = References.fromTuples(reference.getLocator(), reference.getComponent());
-        }
-
-        return connectionListener;
-    }
-
     /**
 	 * Checks if the component is opened.
 	 * 
@@ -271,17 +236,11 @@ export class KafkaMessageQueue extends MessageQueue
         
         if (this._connection == null) {
             this._connection = this.createConnection();
-
-            if (this._listenConnection)
-                this._connectionListener = this.createConnectionListener();
             this._localConnection = true;
         }
 
         if (this._localConnection) {
             await this._connection.open(correlationId);
-
-            if (this._listenConnection)
-                await this._connectionListener.open(correlationId);
         }
 
         if (!this._connection.isOpen()) {
@@ -324,9 +283,6 @@ export class KafkaMessageQueue extends MessageQueue
         }
 
         if (this._localConnection) {
-            if (this._listenConnection)
-                await this._connectionListener.close(correlationId);
-
             await this._connection.close(correlationId);
         }
         

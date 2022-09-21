@@ -35,7 +35,6 @@ import { KafkaSubscription } from './KafkaSubscription';
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
  *   - retry_timeout:        (optional) number of milliseconds to wait on each reconnection attempt (default: 30000)
  *   - request_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
- *   - session_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
  *
  * ### References ###
  *
@@ -87,7 +86,6 @@ export declare class KafkaConnection implements IMessageQueueConnection, IRefere
     protected _requestTimeout: number;
     protected _numPartitions: number;
     protected _replicationFactor: number;
-    protected _sessionTimeout: number;
     /**
      * Creates a new instance of the connection component.
      */

@@ -21,7 +21,6 @@ const pip_services3_messaging_nodex_1 = require("pip-services3-messaging-nodex")
 const pip_services3_messaging_nodex_2 = require("pip-services3-messaging-nodex");
 const pip_services3_messaging_nodex_3 = require("pip-services3-messaging-nodex");
 const KafkaConnection_1 = require("../connect/KafkaConnection");
-const KafkaConnectionListener_1 = require("../connect/KafkaConnectionListener");
 /**
  * Message queue that sends and receives messages via Kafka message broker.
  *
@@ -44,7 +43,6 @@ const KafkaConnectionListener_1 = require("../connect/KafkaConnectionListener");
  *   - username:                    user name
  *   - password:                    user password
  * - options:
- *   - listen_connection:    (optional) listening if the connection is alive (default: false)
  *   - read_partitions:      (optional) list of partition indexes to be read (default: all)
  *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - autosubscribe:        (optional) true to automatically subscribe on option (default: false)
@@ -127,7 +125,6 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
         for (let index = 0; index < partitions.length; index++)
             partitions[index] = parseInt(partitions[index]);
         this._readablePartitions = partitions.length > 0 ? partitions : this._readablePartitions;
-        this._listenConnection = config.getAsBoolean("options.listen_connection");
     }
     /**
      * Sets references to dependent components.
@@ -143,8 +140,6 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
         // Or create a local one
         if (this._connection == null) {
             this._connection = this.createConnection();
-            if (this._listenConnection)
-                this._connectionListener = this.createConnectionListener();
             this._localConnection = true;
         }
         else {
@@ -172,26 +167,6 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
         }
         return connection;
     }
-    createConnectionListener() {
-        let connectionListener = new KafkaConnectionListener_1.KafkaConnectionListener();
-        let reference = new pip_services3_commons_nodex_1.Reference(new pip_services3_commons_nodex_1.Descriptor("pip-services", "connection-listener", "kafka", "*", "1.0"), connectionListener);
-        let queueDescriptor = new pip_services3_commons_nodex_1.Descriptor("pip-services", "message-queue", "kafka", "*", "1.0");
-        if (this._config) {
-            connectionListener.configure(this._config);
-        }
-        // add queue in references
-        if (this._references.getOneOptional(queueDescriptor) == null) {
-            this._references.put(queueDescriptor, this);
-        }
-        if (this._references) {
-            connectionListener.setReferences(this._references);
-            this._references.put(reference.getLocator(), reference.getComponent());
-        }
-        else {
-            this._references = pip_services3_commons_nodex_1.References.fromTuples(reference.getLocator(), reference.getComponent());
-        }
-        return connectionListener;
-    }
     /**
      * Checks if the component is opened.
      *
@@ -212,14 +187,10 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
             }
             if (this._connection == null) {
                 this._connection = this.createConnection();
-                if (this._listenConnection)
-                    this._connectionListener = this.createConnectionListener();
                 this._localConnection = true;
             }
             if (this._localConnection) {
                 yield this._connection.open(correlationId);
-                if (this._listenConnection)
-                    yield this._connectionListener.open(correlationId);
             }
             if (!this._connection.isOpen()) {
                 throw new pip_services3_commons_nodex_3.ConnectionException(correlationId, "CONNECT_FAILED", "Kafka connection is not opened");
@@ -249,8 +220,6 @@ class KafkaMessageQueue extends pip_services3_messaging_nodex_1.MessageQueue {
                 throw new pip_services3_commons_nodex_4.InvalidStateException(correlationId, 'NO_CONNECTION', 'Kafka connection is missing');
             }
             if (this._localConnection) {
-                if (this._listenConnection)
-                    yield this._connectionListener.close(correlationId);
                 yield this._connection.close(correlationId);
             }
             // Unsubscribe from the topic

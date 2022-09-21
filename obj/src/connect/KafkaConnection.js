@@ -47,7 +47,6 @@ const KafkaConnectionResolver_1 = require("./KafkaConnectionResolver");
  *   - max_retries:          (optional) maximum retry attempts (default: 5)
  *   - retry_timeout:        (optional) number of milliseconds to wait on each reconnection attempt (default: 30000)
  *   - request_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
- *   - session_timeout:      (optional) number of milliseconds to wait on flushing messages (default: 30000)
  *
  * ### References ###
  *
@@ -90,7 +89,6 @@ class KafkaConnection {
         this._requestTimeout = 30000;
         this._numPartitions = 1;
         this._replicationFactor = 1;
-        this._sessionTimeout = 30000;
     }
     /**
      * Configures component by passing configuration parameters.
@@ -107,7 +105,6 @@ class KafkaConnection {
         this._maxRetries = config.getAsIntegerWithDefault("options.max_retries", this._maxRetries);
         this._retryTimeout = config.getAsIntegerWithDefault("options.retry_timeout", this._retryTimeout);
         this._requestTimeout = config.getAsIntegerWithDefault("options.request_timeout", this._requestTimeout);
-        this._sessionTimeout = config.getAsIntegerWithDefault("options.session_timeout", this._sessionTimeout);
         this._acks = config.getAsIntegerWithDefault("options.acks", this._acks);
         this._numPartitions = config.getAsIntegerWithDefault('options.num_partitions', this._numPartitions);
         this._replicationFactor = config.getAsIntegerWithDefault('options.replication_factor', this._replicationFactor);
@@ -310,7 +307,7 @@ class KafkaConnection {
             // Subscribe to topic
             let consumer = this._connection.consumer({
                 groupId: groupId || "default",
-                sessionTimeout: options.sessionTimeout || this._sessionTimeout,
+                sessionTimeout: options.sessionTimeout,
                 heartbeatInterval: options.heartbeatInterval,
                 rebalanceTimeout: options.rebalanceTimeout,
                 allowAutoTopicCreation: true
@@ -339,6 +336,59 @@ class KafkaConnection {
                     listener: listener
                 };
                 this._subscriptions.push(subscription);
+                // listen consumer crashes
+                const { CRASH } = consumer.events;
+                const { REQUEST_TIMEOUT } = consumer.events;
+                consumer.on(CRASH, (event) => __awaiter(this, void 0, void 0, function* () {
+                    yield restartConsumer(event);
+                }));
+                consumer.on(REQUEST_TIMEOUT, (event) => __awaiter(this, void 0, void 0, function* () {
+                    yield restartConsumer(event);
+                }));
+                const restartConsumer = (event) => __awaiter(this, void 0, void 0, function* () {
+                    let err = event != null && event.payload != null ? event.payload.error : new Error("Consummer disconnected");
+                    this._logger.error(null, err, "Consummer crashed, try restart");
+                    while (true) {
+                        try {
+                            this._logger.trace(null, "Try restart consummer");
+                            // restart consumer
+                            yield consumer.connect();
+                            yield consumer.subscribe({
+                                topic: topic,
+                                fromBeginning: options.fromBeginning,
+                            });
+                            yield consumer.run({
+                                partitionsConsumedConcurrently: options.partitionsConsumedConcurrently,
+                                autoCommit: options.autoCommit,
+                                autoCommitInterval: options.autoCommitInterval,
+                                autoCommitThreshold: options.autoCommitThreshold,
+                                eachMessage: ({ topic, partition, message }) => __awaiter(this, void 0, void 0, function* () {
+                                    listener.onMessage(topic, partition, message);
+                                })
+                            });
+                            this._logger.trace(null, "Consummer restarted");
+                            break;
+                        }
+                        catch (_a) {
+                            // do nothing...
+                        }
+                    }
+                    // restart consumer
+                    yield consumer.connect();
+                    yield consumer.subscribe({
+                        topic: topic,
+                        fromBeginning: options.fromBeginning,
+                    });
+                    yield consumer.run({
+                        partitionsConsumedConcurrently: options.partitionsConsumedConcurrently,
+                        autoCommit: options.autoCommit,
+                        autoCommitInterval: options.autoCommitInterval,
+                        autoCommitThreshold: options.autoCommitThreshold,
+                        eachMessage: ({ topic, partition, message }) => __awaiter(this, void 0, void 0, function* () {
+                            listener.onMessage(topic, partition, message);
+                        })
+                    });
+                });
             }
             catch (ex) {
                 this._logger.error(null, ex, "Failed to connect Kafka consumer.");

@@ -12,7 +12,6 @@ import { IMessageReceiver } from 'pip-services3-messaging-nodex';
 import { MessageQueue } from 'pip-services3-messaging-nodex';
 import { MessageEnvelope } from 'pip-services3-messaging-nodex';
 import { KafkaConnection } from '../connect/KafkaConnection';
-import { KafkaConnectionListener } from '../connect/KafkaConnectionListener';
 /**
  * Message queue that sends and receives messages via Kafka message broker.
  *
@@ -35,7 +34,6 @@ import { KafkaConnectionListener } from '../connect/KafkaConnectionListener';
  *   - username:                    user name
  *   - password:                    user password
  * - options:
- *   - listen_connection:    (optional) listening if the connection is alive (default: false)
  *   - read_partitions:      (optional) list of partition indexes to be read (default: all)
  *   - write_partition:      (optional) write partition index (default: uses the configured built-in partitioner)
  *   - autosubscribe:        (optional) true to automatically subscribe on option (default: false)
@@ -85,7 +83,6 @@ export declare class KafkaMessageQueue extends MessageQueue implements IReferenc
     private _references;
     private _opened;
     private _localConnection;
-    private _listenConnection;
     /**
      * The dependency resolver.
      */
@@ -98,10 +95,6 @@ export declare class KafkaMessageQueue extends MessageQueue implements IReferenc
      * The Kafka connection component.
      */
     protected _connection: KafkaConnection;
-    /**
-     * The Kafka connection listener component.
-     */
-    protected _connectionListener: KafkaConnectionListener;
     protected _topic: string;
     protected _groupId: string;
     protected _fromBeginning: boolean;
@@ -135,7 +128,6 @@ export declare class KafkaMessageQueue extends MessageQueue implements IReferenc
      */
     unsetReferences(): void;
     private createConnection;
-    private createConnectionListener;
     /**
      * Checks if the component is opened.
      *
