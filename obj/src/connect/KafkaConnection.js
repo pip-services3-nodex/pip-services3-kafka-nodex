@@ -342,9 +342,9 @@ class KafkaConnection {
                 consumer.on(CRASH, (event) => __awaiter(this, void 0, void 0, function* () {
                     yield restartConsumer(event);
                 }));
-                consumer.on(REQUEST_TIMEOUT, (event) => __awaiter(this, void 0, void 0, function* () {
-                    yield restartConsumer(event);
-                }));
+                // consumer.on(REQUEST_TIMEOUT, async (event) => {
+                //     await restartConsumer(event);
+                // })
                 let isReady = true;
                 const restartConsumer = (event) => __awaiter(this, void 0, void 0, function* () {
                     let err = event != null && event.payload != null ? event.payload.error : new Error("Consummer disconnected");

@@ -402,9 +402,9 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
                 await restartConsumer(event);
             })
 
-            consumer.on(REQUEST_TIMEOUT, async (event) => {
-                await restartConsumer(event);
-            })
+            // consumer.on(REQUEST_TIMEOUT, async (event) => {
+            //     await restartConsumer(event);
+            // })
 
             let isReady = true;
 
