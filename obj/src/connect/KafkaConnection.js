@@ -338,7 +338,7 @@ class KafkaConnection {
                 this._subscriptions.push(subscription);
                 // listen consumer crashes
                 const { CRASH } = consumer.events;
-                const { REQUEST_TIMEOUT } = consumer.events;
+                // const { REQUEST_TIMEOUT } = consumer.events;
                 consumer.on(CRASH, (event) => __awaiter(this, void 0, void 0, function* () {
                     yield restartConsumer(event);
                 }));
@@ -347,39 +347,46 @@ class KafkaConnection {
                 // })
                 let isReady = true;
                 const restartConsumer = (event) => __awaiter(this, void 0, void 0, function* () {
-                    let err = event != null && event.payload != null ? event.payload.error : new Error("Consummer disconnected");
-                    this._logger.error(null, err, "Consummer crashed, try restart");
-                    while (true) {
-                        if (!isReady)
-                            continue;
-                        isReady = false;
-                        try {
-                            this._logger.trace(null, "Try restart consummer");
-                            // restart consumer
-                            yield consumer.connect();
-                            yield consumer.subscribe({
-                                topic: topic,
-                                fromBeginning: options.fromBeginning,
-                            });
-                            yield consumer.run({
-                                partitionsConsumedConcurrently: options.partitionsConsumedConcurrently,
-                                autoCommit: options.autoCommit,
-                                autoCommitInterval: options.autoCommitInterval,
-                                autoCommitThreshold: options.autoCommitThreshold,
-                                eachMessage: ({ topic, partition, message }) => __awaiter(this, void 0, void 0, function* () {
-                                    listener.onMessage(topic, partition, message);
-                                })
-                            });
-                            this._logger.trace(null, "Consummer restarted");
-                            break;
+                    new Promise((resolve) => __awaiter(this, void 0, void 0, function* () {
+                        while (true) {
+                            if (!isReady)
+                                continue;
+                            isReady = false;
+                            let err = event != null && event.payload != null ? event.payload.error : new Error("Consummer disconnected");
+                            this._logger.error(null, err, "Consummer crashed, try restart");
+                            try {
+                                // try reopen connection
+                                this._logger.trace(null, "Connection crashed");
+                                yield this.close(null);
+                                yield this.open(null);
+                                this._logger.trace(null, "Try restart consummer");
+                                // restart consumer
+                                yield consumer.connect();
+                                yield consumer.subscribe({
+                                    topic: topic,
+                                    fromBeginning: options.fromBeginning,
+                                });
+                                yield consumer.run({
+                                    maxBytes: 3145728,
+                                    partitionsConsumedConcurrently: options.partitionsConsumedConcurrently,
+                                    autoCommit: options.autoCommit,
+                                    autoCommitInterval: options.autoCommitInterval,
+                                    autoCommitThreshold: options.autoCommitThreshold,
+                                    eachMessage: ({ topic, partition, message }) => __awaiter(this, void 0, void 0, function* () {
+                                        listener.onMessage(topic, partition, message);
+                                    })
+                                });
+                                this._logger.trace(null, "Consummer restarted");
+                                break;
+                            }
+                            catch (_a) {
+                                // do nothing...
+                            }
+                            finally {
+                                isReady = true;
+                            }
                         }
-                        catch (_a) {
-                            // do nothing...
-                        }
-                        finally {
-                            isReady = true;
-                        }
-                    }
+                    }));
                 });
             }
             catch (ex) {

@@ -396,7 +396,7 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
 
             // listen consumer crashes
             const { CRASH } = consumer.events;
-            const { REQUEST_TIMEOUT } = consumer.events;
+            // const { REQUEST_TIMEOUT } = consumer.events;
 
             consumer.on(CRASH, async (event) => {
                 await restartConsumer(event);
@@ -407,42 +407,49 @@ export class KafkaConnection implements IMessageQueueConnection, IReferenceable,
             // })
 
             let isReady = true;
-
             const restartConsumer = async (event) => {
-                let err = event != null && event.payload != null ? event.payload.error : new Error("Consummer disconnected");
-                this._logger.error(null, err, "Consummer crashed, try restart");
+                new Promise(async resolve => {
+                    while (true) {
+                        if (!isReady) continue;
+                        isReady = false;
 
-                while (true) {
-                    if (!isReady) continue;
+                        let err = event != null && event.payload != null ? event.payload.error : new Error("Consummer disconnected");
+                        this._logger.error(null, err, "Consummer crashed, try restart");
 
-                    isReady = false;
-                    try {
-                        this._logger.trace(null, "Try restart consummer");
-                        // restart consumer
-                        await consumer.connect();
-                        await consumer.subscribe({
-                            topic: topic,
-                            fromBeginning: options.fromBeginning,
-                        });
-                        await consumer.run({
-                            partitionsConsumedConcurrently: options.partitionsConsumedConcurrently,
-                            autoCommit: options.autoCommit,
-                            autoCommitInterval: options.autoCommitInterval,
-                            autoCommitThreshold: options.autoCommitThreshold,
-                            eachMessage: async ({ topic, partition, message }) => {
-                                listener.onMessage(topic, partition, message);
-                            }
-                        });
+                        try {
+                            // try reopen connection
+                            this._logger.trace(null, "Connection crashed");
+                            await this.close(null);
+                            await this.open(null);
 
-                        this._logger.trace(null, "Consummer restarted");
-                        break;
+                            this._logger.trace(null, "Try restart consummer");
+                            // restart consumer
+                            await consumer.connect();
+                            await consumer.subscribe({
+                                topic: topic,
+                                fromBeginning: options.fromBeginning,
+                            });
+                            await consumer.run({
+                                maxBytes: 3145728, // 3MB
+                                partitionsConsumedConcurrently: options.partitionsConsumedConcurrently,
+                                autoCommit: options.autoCommit,
+                                autoCommitInterval: options.autoCommitInterval,
+                                autoCommitThreshold: options.autoCommitThreshold,
+                                eachMessage: async ({ topic, partition, message }) => {
+                                    listener.onMessage(topic, partition, message);
+                                }
+                            });
+
+                            this._logger.trace(null, "Consummer restarted");
+                            break;
+                        }
+                        catch {
+                            // do nothing...
+                        } finally {
+                            isReady = true;
+                        }
                     }
-                    catch {
-                        // do nothing...
-                    } finally {
-                        isReady = true;
-                    }
-                }
+                });
             }
         } catch(ex) {
             this._logger.error(null, ex, "Failed to connect Kafka consumer.");
